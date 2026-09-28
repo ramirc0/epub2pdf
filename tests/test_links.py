@@ -155,3 +155,20 @@ def test_keeps_inserted_cover_when_book_lacks_it(make_epub, tmp_path):
         metadata='<dc:title>Test</dc:title><meta name="cover" content="pic"/>',
     )
     assert typeset(epub, tmp_path).read_text().count('image("') == 1
+
+
+HOOK = "\N{LEFTWARDS ARROW WITH HOOK}"
+UP = "\N{UPWARDS ARROW}"
+
+
+def test_replaces_backlink_arrows(make_epub, tmp_path):
+    text = f"{HOOK}\N{VARIATION SELECTOR-15} {HOOK}\N{VARIATION SELECTOR-16} {HOOK}"
+    epub = make_epub({"ch1.xhtml": f"<p>{text}</p>"})
+    assert f"{UP} {UP} {UP}\n" in typeset(epub, tmp_path).read_text()
+
+
+def test_repairs_metadata_too():
+    title = {"t": "MetaInlines", "c": [{"t": "Str", "c": HOOK}]}
+    doc = {"meta": {"title": title}, "blocks": []}
+    links.fix(doc)
+    assert title["c"] == [{"t": "Str", "c": UP}]

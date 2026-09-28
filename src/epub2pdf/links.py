@@ -34,6 +34,11 @@ ATTR = {
     "Code": 0, "Link": 0, "Image": 0, "Span": 0, "CodeBlock": 0, "Header": 1,
     "Table": 0, "Figure": 0, "Div": 0,
 }  # fmt: skip
+# Endnote backlinks are usually this arrow, which few text fonts have; typst
+# then falls back to a colour emoji.
+BACKLINK = re.compile(
+    "\N{LEFTWARDS ARROW WITH HOOK}[\N{VARIATION SELECTOR-15}\N{VARIATION SELECTOR-16}]?"
+)
 
 
 def fix(doc: dict) -> dict:
@@ -54,7 +59,7 @@ def fix(doc: dict) -> dict:
     linked = set()
     _walk(doc, {"Link": lambda link: _repair(link, ids, linked)})
     # Inlines first, as in pandoc's typewise traversal.
-    _walk(doc, {"Inline": lambda el: _inline(el, linked)})
+    _walk(doc, {"Str": _backlink, "Inline": lambda el: _inline(el, linked)})
     _walk(doc, {"Block": lambda el: _block(el, linked)})
     return doc
 
@@ -202,6 +207,11 @@ def _block(el, linked):
     if anchor:
         out.append({"t": "RawBlock", "c": ["typst", anchor]})
     return out + [el]
+
+
+def _backlink(el):
+    """Replace backlink arrows in a Str with an arrow text fonts have."""
+    el["c"] = BACKLINK.sub("\N{UPWARDS ARROW}", el["c"])
 
 
 def _raw(text):
