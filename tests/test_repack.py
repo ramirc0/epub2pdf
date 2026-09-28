@@ -101,3 +101,29 @@ def test_drops_broken_svg_images(make_epub, tmp_path):
     repack.repack(epub, tmp_path / "fixed.epub")
     with zipfile.ZipFile(tmp_path / "fixed.epub") as z:
         assert b"<image" not in z.read("OEBPS/text/ch1.xhtml")
+
+
+def test_keeps_title_refined_as_main(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": "<p>One</p>"},
+        metadata='<dc:title id="t1">Series</dc:title><dc:title id="t2">Main</dc:title>'
+        '<meta refines="#t1" property="title-type">collection</meta>'
+        '<meta refines="#t2" property="title-type">main</meta>',
+    )
+    assert "title: [Main]," in typeset(epub, tmp_path).read_text()
+
+
+def test_keeps_first_of_unrefined_titles(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": "<p>One</p>"},
+        metadata="<dc:title>First</dc:title><dc:title>Second</dc:title>",
+    )
+    assert "title: [First]," in typeset(epub, tmp_path).read_text()
+
+
+def test_drops_time_from_date(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": "<p>One</p>"},
+        metadata="<dc:title>Test</dc:title><dc:date>2020-01-02T03:04:05Z</dc:date>",
+    )
+    assert "date: [2020-01-02]," in typeset(epub, tmp_path).read_text()

@@ -13,6 +13,14 @@ ITEM = re.compile(rb"<item\b[^>]*/>")
 # Some images are empty or not images at all, which aborts typst.
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
 IMAGE_MAGIC = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF", b"<?xml", b"<svg")
+# Pandoc joins every dc:title without a separator and keeps full timestamps
+# as dates.
+DC_TITLE = re.compile(rb"<dc:title\b[^>]*>.*?</dc:title>\s*", re.DOTALL)
+MAIN_TITLE = re.compile(
+    rb'<meta\b(?=[^>]*\bproperty="title-type")(?=[^>]*\brefines="#([^"]+)")'
+    rb"[^>]*>\s*main\s*<"
+)
+TIMESTAMP = re.compile(rb"(<dc:date\b[^>]*>\s*\d{4}-\d\d-\d\d)T[^<]*")
 # The EPUB 3 nav document and the EPUB 2 guide's contents page.
 NAV_ITEM = re.compile(rb'<item\b(?=[^>]*\bproperties="[^"]*\bnav\b)[^>]*\bid="([^"]+)"')
 TOC_REF = re.compile(rb'<reference\b(?=[^>]*\btype="toc")[^>]*\bhref="([^"#]*)')
@@ -68,6 +76,7 @@ def repack(src: Path, dst: Path) -> bool:
                     data = broken_img.sub(b"", data)
             elif entry.filename.endswith(".opf"):
                 data = _prune(data, posixpath.dirname(entry.filename), names)
+                data = TIMESTAMP.sub(rb"\1", _one_title(data))
                 needs_toc |= not _has_toc(data)
             zout.writestr(entry, data)
     return needs_toc
@@ -109,3 +118,19 @@ def _resolve(href, base):
     """Return the archive path of an href relative to base."""
     href = urllib.parse.unquote(href.decode("utf8", "replace")).split("#")[0]
     return posixpath.normpath(posixpath.join(base, href))
+
+
+def _one_title(opf):
+    """Keep the dc:title refined as main, else the first."""
+    main = MAIN_TITLE.search(opf)
+    want = b'id="%s"' % main.group(1) if main else b""
+    kept = False
+
+    def keep(match):
+        nonlocal kept
+        if kept or want not in match.group(0):
+            return b""
+        kept = True
+        return match.group(0)
+
+    return DC_TITLE.sub(keep, opf)
