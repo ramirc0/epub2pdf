@@ -182,3 +182,11 @@ def test_fills_empty_square_roots(make_epub, tmp_path, fonts):
         }
     )
     typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)
+
+
+def test_leaves_no_trace_of_an_unfetchable_cover(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": "<p>One</p>"},
+        metadata='<dc:title>Test</dc:title><meta name="cover" content="missing.jpeg"/>',
+    )
+    assert "\n;\n" not in typeset(epub, tmp_path).read_text()
