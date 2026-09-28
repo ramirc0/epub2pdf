@@ -14,6 +14,12 @@ TITLEPAGE = re.compile(rb'(epub:type="[^"]*)titlepage')
 EPUB_TYPE = re.compile(rb'epub:type="[^"]*"')
 TOC_TYPE = re.compile(rb"(?<![\w-])toc(?![\w-])")
 HIDDEN_NAV = re.compile(rb"<nav\b[^>]*\bhidden\b[^>]*>.*?</nav>", re.DOTALL)
+# It keeps <article>, <aside> and similar containers as raw HTML, which the
+# typst writer drops along with their ids; an <hgroup> would also split a
+# chapter's number from its title.
+CONTAINER = re.compile(rb"<(/?)(?:article|nav|footer|details)\b")
+HGROUP = re.compile(rb"<hgroup\b[^>]*>(.*?)</hgroup>", re.DOTALL)
+HGROUP_PART = re.compile(rb"<(h[1-6]|p)\b([^>]*)>(.*?)</\1>", re.DOTALL)
 # Some src and href attributes pad the path with whitespace.
 PADDED = re.compile(rb'\b(src|href)="\s*([^"]*?)\s*"')
 # Some manifests list files missing from the archive, which aborts the reader.
@@ -100,7 +106,18 @@ def _fix_html(data, broken_img):
     if broken_img:
         data = broken_img.sub(b"", data)
     data = HIDDEN_NAV.sub(b"", data)
-    return EPUB_TYPE.sub(lambda m: TOC_TYPE.sub(b"", m.group(0)), data)
+    data = EPUB_TYPE.sub(lambda m: TOC_TYPE.sub(b"", m.group(0)), data)
+    return CONTAINER.sub(rb"<\1div", HGROUP.sub(_merge_hgroup, data))
+
+
+def _merge_hgroup(match):
+    """Join an hgroup's heading and subtitles into one heading, as readers show it."""
+    parts = HGROUP_PART.findall(match.group(1))
+    head = next((p for p in parts if p[0] != b"p"), None)
+    if not head:
+        return match.group(1)
+    text = b": ".join(p[2].strip() for p in parts)
+    return b"<%s%s>%s</%s>" % (head[0], head[1], text, head[0])
 
 
 def _has_toc(opf):

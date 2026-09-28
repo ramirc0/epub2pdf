@@ -2,6 +2,7 @@
 
 import zipfile
 
+import pytest
 import typst
 
 from epub2pdf import repack
@@ -157,3 +158,21 @@ def test_drops_hidden_nav(make_epub, tmp_path):
         nav_in_spine=True,
     )
     assert "Begin reading" not in typeset(epub, tmp_path).read_text()
+
+
+@pytest.mark.parametrize("tag", ["article", "nav", "footer", "details"])
+def test_keeps_ids_of_containers(make_epub, tmp_path, fonts, tag):
+    epub = make_epub(
+        {
+            "ch1.xhtml": f'<{tag} id="b"><p>Inside</p></{tag}>',
+            "ch2.xhtml": '<p><a href="ch1.xhtml#b">Back</a></p>',
+        }
+    )
+    book = typeset(epub, tmp_path)
+    assert "#link(<ch1.xhtml_b>)[Back]" in book.read_text()
+    typst.compile(book, root=tmp_path, font_paths=fonts)
+
+
+def test_joins_hgroup_into_one_heading(make_epub, tmp_path):
+    epub = make_epub({"ch1.xhtml": "<hgroup><h2>Chapter 1</h2><p>Start</p></hgroup>"})
+    assert "== Chapter 1: Start\n" in typeset(epub, tmp_path).read_text()
