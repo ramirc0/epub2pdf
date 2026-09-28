@@ -1,5 +1,8 @@
 """Tests for the pandoc AST repairs in epub2pdf.links."""
 
+import typst
+
+from epub2pdf import links
 from epub2pdf.cli import typeset
 
 EXTRA = (
@@ -53,3 +56,33 @@ def test_keeps_links_with_a_scheme(make_epub, tmp_path):
     source = typeset(epub, tmp_path).read_text()
     assert '#link("https://example.com/a.html#b")[Web]' in source
     assert '#link("mailto:me@example.com")[Mail]' in source
+
+
+def test_anchors_linked_ids_that_typst_would_lose(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {
+            "my ch.xhtml": '<p><img id="pic" src="../images/pic.png" alt=""/></p>'
+            '<p>Text<a id="ref" href="ch2.xhtml#note" class="noteref">1</a></p>',
+            "ch2.xhtml": '<p id="note"><a href="my%20ch.xhtml">Start</a> '
+            '<a href="my%20ch.xhtml#pic">Picture</a> '
+            '<a href="my%20ch.xhtml#ref">Back</a></p>',
+        }
+    )
+    typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)
+
+
+def test_escapes_label_quotes():
+    doc = {
+        "blocks": [
+            {"t": "Para", "c": [{"t": "Span", "c": [['a"b\\c', [], []], []]}]},
+            {
+                "t": "Para",
+                "c": [{"t": "Link", "c": [["", [], []], [], ['#a"b\\c', ""]]}],
+            },
+        ]
+    }
+    links.fix(doc)
+    assert doc["blocks"][0]["c"][0] == {
+        "t": "RawInline",
+        "c": ["typst", '#metadata(none)#label("a\\"b\\\\c");'],
+    }

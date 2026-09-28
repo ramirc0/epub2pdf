@@ -5,6 +5,7 @@ import urllib.parse
 import zipfile
 
 import pytest
+import typst
 
 # A 1x1 PNG, stored in every book as OEBPS/images/pic.png.
 PIC = base64.b64decode(
@@ -112,3 +113,9 @@ def make_epub(tmp_path):
         return path
 
     return make
+
+
+@pytest.fixture(scope="session")
+def fonts():
+    """Return typst's embedded fonts; a system font scan takes 0.6 s per compile."""
+    return typst.Fonts(include_system_fonts=False)

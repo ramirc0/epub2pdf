@@ -3,9 +3,15 @@
 EPUB chapters link to each other by filename, and their fragments often name
 an anchor the target never defines. Typst treats a dead link as an error, so
 point each link at an id that exists, or unwrap it.
+
+Pandoc's typst writer drops ids on links, images, code and most blocks, and
+turns an empty anchor span into a bare label, which typst discards when no
+content precedes it. So each linked id becomes an invisible metadata element
+placed just before its owner, and every other id is cleared.
 """
 
 import re
+import urllib.parse
 
 # The kind of each pandoc element, for filters that handle a whole kind.
 KIND = dict.fromkeys(
@@ -44,7 +50,11 @@ def fix(doc: dict) -> dict:
         The repaired AST.
     """
     ids = _ids(doc)
-    _walk(doc, {"Link": lambda link: _repair(link, ids)})
+    linked = set()
+    _walk(doc, {"Link": lambda link: _repair(link, ids, linked)})
+    # Inlines first, as in pandoc's typewise traversal.
+    _walk(doc, {"Inline": lambda el: _inline(el, linked)})
+    _walk(doc, {"Block": lambda el: _block(el, linked)})
     return doc
 
 
@@ -100,8 +110,11 @@ def _chapter_of(target, ids):
     return None
 
 
-def _repair(link, ids):
-    """Point link at an id that exists, or return its content to unwrap it."""
+def _repair(link, ids, linked):
+    """Point link at an id that exists, or return its content to unwrap it.
+
+    Adds the id the link points at to the set linked.
+    """
     target = link["c"][2][0]
     if re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", target):
         return None
@@ -113,6 +126,35 @@ def _repair(link, ids):
         if found and frag and f"{found}_{frag}" in ids:
             found = f"{found}_{frag}"
     if found in ids:
+        linked.add(found)
         link["c"][2][0] = "#" + found
         return None
     return link["c"][1]
+
+
+def _take(el, linked):
+    """Clear the id of el and return its typst anchor, if a link needs one.
+
+    The label is percent-decoded because pandoc decodes link targets that way.
+    """
+    attr = _attr(el)
+    if not attr or not attr[0]:
+        return None
+    ident, attr[0] = attr[0], ""
+    if ident not in linked:
+        return None
+    linked.remove(ident)
+    label = re.sub(r'[\\"]', r"\\\g<0>", urllib.parse.unquote(ident))
+    return f'#metadata(none)#label("{label}");'
+
+
+def _inline(el, linked):
+    """Put the anchor of an inline element in front of it."""
+    anchor = _take(el, linked)
+    return [{"t": "RawInline", "c": ["typst", anchor]}, el] if anchor else None
+
+
+def _block(el, linked):
+    """Put the anchor of a block element in front of it."""
+    anchor = _take(el, linked)
+    return [{"t": "RawBlock", "c": ["typst", anchor]}, el] if anchor else None
