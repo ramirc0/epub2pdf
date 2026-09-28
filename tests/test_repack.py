@@ -1,5 +1,7 @@
 """Tests for the EPUB repairs in epub2pdf.repack."""
 
+import zipfile
+
 import typst
 
 from epub2pdf import repack
@@ -67,3 +69,35 @@ def test_trims_padded_paths(make_epub, tmp_path, fonts):
     book = typeset(epub, tmp_path)
     assert "#link(<ch2.xhtml_s>)[Two]" in book.read_text()
     typst.compile(book, root=tmp_path, font_paths=fonts)
+
+
+def test_drops_images_that_are_empty_or_not_images(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<p><img src="../images/bad.png" alt=""/>'
+            '<img src="../images/bad.jpg" alt=""/>'
+            '<img src="../images/pic.png" alt=""/></p>'
+        },
+        files={"images/bad.png": b"", "images/bad.jpg": b"<html></html>"},
+        manifest='<item id="b1" href="images/bad.png" media-type="image/png"/>'
+        '<item id="b2" href="images/bad.jpg" media-type="image/jpeg"/>',
+    )
+    book = typeset(epub, tmp_path)
+    source = book.read_text()
+    assert "pic.png" in source
+    assert "bad." not in source
+    typst.compile(book, root=tmp_path, font_paths=fonts)
+
+
+def test_drops_broken_svg_images(make_epub, tmp_path):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<svg xmlns="http://www.w3.org/2000/svg" '
+            'xmlns:xlink="http://www.w3.org/1999/xlink">'
+            '<image xlink:href="../images/bad.png"/></svg>'
+        },
+        files={"images/bad.png": b""},
+    )
+    repack.repack(epub, tmp_path / "fixed.epub")
+    with zipfile.ZipFile(tmp_path / "fixed.epub") as z:
+        assert b"<image" not in z.read("OEBPS/text/ch1.xhtml")

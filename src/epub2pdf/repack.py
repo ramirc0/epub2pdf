@@ -10,6 +10,9 @@ from pathlib import Path
 PADDED = re.compile(rb'\b(src|href)="\s*([^"]*?)\s*"')
 # Some manifests list files missing from the archive, which aborts the reader.
 ITEM = re.compile(rb"<item\b[^>]*/>")
+# Some images are empty or not images at all, which aborts typst.
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+IMAGE_MAGIC = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF", b"<?xml", b"<svg")
 # The EPUB 3 nav document and the EPUB 2 guide's contents page.
 NAV_ITEM = re.compile(rb'<item\b(?=[^>]*\bproperties="[^"]*\bnav\b)[^>]*\bid="([^"]+)"')
 TOC_REF = re.compile(rb'<reference\b(?=[^>]*\btype="toc")[^>]*\bhref="([^"#]*)')
@@ -42,6 +45,17 @@ def repack(src: Path, dst: Path) -> bool:
         zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout,
     ):
         names = set(zin.namelist())
+        broken = [
+            posixpath.basename(n).encode()
+            for n in names
+            if n.lower().endswith(IMAGE_EXT)
+            and not zin.read(n).lstrip().startswith(IMAGE_MAGIC)
+        ]
+        broken_img = re.compile(
+            rb'<(?:img|image)\b[^>]*["/](?:'
+            + b"|".join(map(re.escape, broken))
+            + rb')"[^>]*>'
+        )
         zout.writestr(zipfile.ZipInfo("mimetype"), "application/epub+zip")
         for entry in zin.infolist():
             if entry.filename == "mimetype":
@@ -49,7 +63,10 @@ def repack(src: Path, dst: Path) -> bool:
             data = zin.read(entry)
             if entry.filename.endswith((".html", ".xhtml", ".opf")):
                 data = PADDED.sub(rb'\1="\2"', data)
-            if entry.filename.endswith(".opf"):
+            if entry.filename.endswith((".html", ".xhtml")):
+                if broken:
+                    data = broken_img.sub(b"", data)
+            elif entry.filename.endswith(".opf"):
                 data = _prune(data, posixpath.dirname(entry.filename), names)
                 needs_toc |= not _has_toc(data)
             zout.writestr(entry, data)
