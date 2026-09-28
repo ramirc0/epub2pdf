@@ -122,3 +122,17 @@ def test_keeps_line_breaks_inside_headings(make_epub, tmp_path, fonts):
 def test_ends_images_before_a_parenthesis(make_epub, tmp_path, fonts):
     epub = make_epub({"ch1.xhtml": '<p><img src="../images/pic.png" alt=""/>(1)</p>'})
     typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)
+
+
+def test_raises_note_references(make_epub, tmp_path):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<p>Text<a href="ch2.xhtml#n1" class="noteref">1</a>'
+            '<a href="ch2.xhtml#n2" role="doc-noteref">2</a></p>',
+            "ch2.xhtml": '<section id="n1"><p>One</p></section>'
+            '<section id="n2"><p>Two</p></section>',
+        }
+    )
+    source = typeset(epub, tmp_path).read_text()
+    assert "#link(<ch2.xhtml_n1>)[#super[1];]" in source
+    assert "#link(<ch2.xhtml_n2>)[#super[2];]" in source

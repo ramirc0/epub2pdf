@@ -128,6 +128,10 @@ def _repair(link, ids, linked):
     if found in ids:
         linked.add(found)
         link["c"][2][0] = "#" + found
+        # Reading systems raise note references with CSS, which pandoc ignores.
+        _, classes, attributes = link["c"][0]
+        if "noteref" in classes or dict(attributes).get("role") == "doc-noteref":
+            link["c"][1] = [{"t": "Superscript", "c": link["c"][1]}]
         return None
     return link["c"][1]
 
