@@ -59,7 +59,10 @@ def fix(doc: dict) -> dict:
     linked = set()
     _walk(doc, {"Link": lambda link: _repair(link, ids, linked)})
     # Inlines first, as in pandoc's typewise traversal.
-    _walk(doc, {"Str": _backlink, "Inline": lambda el: _inline(el, linked)})
+    _walk(
+        doc,
+        {"Str": _backlink, "Math": _math, "Inline": lambda el: _inline(el, linked)},
+    )
     _walk(doc, {"Block": lambda el: _block(el, linked)})
     return doc
 
@@ -212,6 +215,15 @@ def _block(el, linked):
 def _backlink(el):
     """Replace backlink arrows in a Str with an arrow text fonts have."""
     el["c"] = BACKLINK.sub("\N{UPWARDS ARROW}", el["c"])
+
+
+def _math(el):
+    """Give empty square roots a radicand.
+
+    Malformed MathML can leave a square root with nothing under it, which typst
+    rejects.
+    """
+    el["c"][1] = el["c"][1].replace(r"\sqrt{}", r"\sqrt{\ }")
 
 
 def _raw(text):

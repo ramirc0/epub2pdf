@@ -172,3 +172,13 @@ def test_repairs_metadata_too():
     doc = {"meta": {"title": title}, "blocks": []}
     links.fix(doc)
     assert title["c"] == [{"t": "Str", "c": UP}]
+
+
+def test_fills_empty_square_roots(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<p><math xmlns="http://www.w3.org/1998/Math/MathML">'
+            "<msqrt></msqrt></math></p>"
+        }
+    )
+    typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)
