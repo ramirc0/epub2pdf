@@ -117,3 +117,8 @@ def test_keeps_line_breaks_inside_headings(make_epub, tmp_path, fonts):
         font_paths=fonts,
     )
     assert "(Start)" in bodies
+
+
+def test_ends_images_before_a_parenthesis(make_epub, tmp_path, fonts):
+    epub = make_epub({"ch1.xhtml": '<p><img src="../images/pic.png" alt=""/>(1)</p>'})
+    typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)

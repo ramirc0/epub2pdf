@@ -149,9 +149,16 @@ def _take(el, linked):
 
 
 def _inline(el, linked):
-    """Put the anchor of an inline element in front of it."""
+    """Put the anchor of an inline element in front of it.
+
+    Pandoc writes an image as #box(image(...)) with no terminating semicolon,
+    so text starting with "(" would continue the call.
+    """
     anchor = _take(el, linked)
-    return [_raw(anchor), el] if anchor else None
+    out = [_raw(anchor), el] if anchor else [el]
+    if el["t"] == "Image":
+        out.append(_raw(";"))
+    return out
 
 
 def _block(el, linked):
