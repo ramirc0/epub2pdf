@@ -105,3 +105,15 @@ def test_hoists_anchors_out_of_repeated_table_rows(make_epub, tmp_path, fonts):
         }
     )
     typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)
+
+
+def test_keeps_line_breaks_inside_headings(make_epub, tmp_path, fonts):
+    epub = make_epub({"ch1.xhtml": "<h1>Chapter 1<br/>(Start)</h1>"})
+    bodies = typst.query(
+        typeset(epub, tmp_path),
+        "heading",
+        field="body",
+        root=tmp_path,
+        font_paths=fonts,
+    )
+    assert "(Start)" in bodies

@@ -151,7 +151,7 @@ def _take(el, linked):
 def _inline(el, linked):
     """Put the anchor of an inline element in front of it."""
     anchor = _take(el, linked)
-    return [{"t": "RawInline", "c": ["typst", anchor]}, el] if anchor else None
+    return [_raw(anchor), el] if anchor else None
 
 
 def _block(el, linked):
@@ -159,11 +159,14 @@ def _block(el, linked):
 
     The outline repeats each heading's text, and a table that breaks across
     pages repeats its header and footer rows, which would define their anchors
-    twice; hoist them in front. Inlines are walked first.
+    twice; hoist them in front. Inlines are walked first. A typst heading ends
+    with its source line, and pandoc writes a line break as a backslash and a
+    newline, so the rest of the heading would spill into the next paragraph.
     """
     out = []
     if el["t"] == "Header":
         _walk(el["c"][2], _hoist(out))
+        _walk(el["c"][2], {"LineBreak": lambda _: [_raw("#linebreak();")]})
     elif el["t"] == "Table":
         head, foot = el["c"][3], el["c"][5]
         for row in head[1] + foot[1]:
@@ -173,6 +176,11 @@ def _block(el, linked):
     if anchor:
         out.append({"t": "RawBlock", "c": ["typst", anchor]})
     return out + [el]
+
+
+def _raw(text):
+    """Return a typst RawInline."""
+    return {"t": "RawInline", "c": ["typst", text]}
 
 
 def _hoist(out):
