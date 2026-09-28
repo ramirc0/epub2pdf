@@ -6,11 +6,20 @@ import urllib.parse
 import zipfile
 from pathlib import Path
 
+# Pandoc's HTML reader discards <section epub:type="...titlepage...">, where
+# many books keep illustrations. It also discards any epub:type="toc" element,
+# a book's own contents page, yet shows the <nav hidden> lists that reading
+# systems hide.
+TITLEPAGE = re.compile(rb'(epub:type="[^"]*)titlepage')
+EPUB_TYPE = re.compile(rb'epub:type="[^"]*"')
+TOC_TYPE = re.compile(rb"(?<![\w-])toc(?![\w-])")
+HIDDEN_NAV = re.compile(rb"<nav\b[^>]*\bhidden\b[^>]*>.*?</nav>", re.DOTALL)
 # Some src and href attributes pad the path with whitespace.
 PADDED = re.compile(rb'\b(src|href)="\s*([^"]*?)\s*"')
 # Some manifests list files missing from the archive, which aborts the reader.
 ITEM = re.compile(rb"<item\b[^>]*/>")
-# Some images are empty or not images at all, which aborts typst.
+# Some images are empty or not images at all, which aborts typst, so their
+# tags are dropped.
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
 IMAGE_MAGIC = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF", b"<?xml", b"<svg")
 # Pandoc joins every dc:title without a separator and keeps full timestamps
@@ -53,17 +62,7 @@ def repack(src: Path, dst: Path) -> bool:
         zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout,
     ):
         names = set(zin.namelist())
-        broken = [
-            posixpath.basename(n).encode()
-            for n in names
-            if n.lower().endswith(IMAGE_EXT)
-            and not zin.read(n).lstrip().startswith(IMAGE_MAGIC)
-        ]
-        broken_img = re.compile(
-            rb'<(?:img|image)\b[^>]*["/](?:'
-            + b"|".join(map(re.escape, broken))
-            + rb')"[^>]*>'
-        )
+        broken_img = _broken_images(zin)
         zout.writestr(zipfile.ZipInfo("mimetype"), "application/epub+zip")
         for entry in zin.infolist():
             if entry.filename == "mimetype":
@@ -72,14 +71,36 @@ def repack(src: Path, dst: Path) -> bool:
             if entry.filename.endswith((".html", ".xhtml", ".opf")):
                 data = PADDED.sub(rb'\1="\2"', data)
             if entry.filename.endswith((".html", ".xhtml")):
-                if broken:
-                    data = broken_img.sub(b"", data)
+                data = _fix_html(data, broken_img)
             elif entry.filename.endswith(".opf"):
                 data = _prune(data, posixpath.dirname(entry.filename), names)
                 data = TIMESTAMP.sub(rb"\1", _one_title(data))
                 needs_toc |= not _has_toc(data)
             zout.writestr(entry, data)
     return needs_toc
+
+
+def _broken_images(zin):
+    """Return a regex for the tags of images in zin that are empty or not images."""
+    broken = [
+        posixpath.basename(n).encode()
+        for n in zin.namelist()
+        if n.lower().endswith(IMAGE_EXT)
+        and not zin.read(n).lstrip().startswith(IMAGE_MAGIC)
+    ]
+    if not broken:
+        return None
+    names = b"|".join(map(re.escape, broken))
+    return re.compile(rb'<(?:img|image)\b[^>]*["/](?:' + names + rb')"[^>]*>')
+
+
+def _fix_html(data, broken_img):
+    """Rewrite an XHTML document, dropping tags broken_img matches, if any."""
+    data = TITLEPAGE.sub(rb"\1", data)
+    if broken_img:
+        data = broken_img.sub(b"", data)
+    data = HIDDEN_NAV.sub(b"", data)
+    return EPUB_TYPE.sub(lambda m: TOC_TYPE.sub(b"", m.group(0)), data)
 
 
 def _has_toc(opf):

@@ -127,3 +127,33 @@ def test_drops_time_from_date(make_epub, tmp_path):
         metadata="<dc:title>Test</dc:title><dc:date>2020-01-02T03:04:05Z</dc:date>",
     )
     assert "date: [2020-01-02]," in typeset(epub, tmp_path).read_text()
+
+
+def test_keeps_title_page(make_epub, tmp_path):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<section epub:type="frontmatter titlepage">'
+            "<p>Title page</p></section>"
+        }
+    )
+    assert "Title page" in typeset(epub, tmp_path).read_text()
+
+
+def test_keeps_own_contents(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": '<section epub:type="toc"><p>Contents page</p></section>'},
+        nav_in_spine=True,
+    )
+    source = typeset(epub, tmp_path).read_text()
+    assert "Contents page" in source
+    assert "[ch1.xhtml]" in source
+
+
+def test_drops_hidden_nav(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": "<p>One</p>"},
+        nav='<nav epub:type="landmarks" hidden=""><ol>'
+        '<li><a href="ch1.xhtml">Begin reading</a></li></ol></nav>',
+        nav_in_spine=True,
+    )
+    assert "Begin reading" not in typeset(epub, tmp_path).read_text()
