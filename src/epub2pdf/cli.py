@@ -15,9 +15,15 @@ from epub2pdf import links, repack
 
 VARIANTS = ("rose-pine", "rose-pine-moon", "rose-pine-dawn")
 MAINFONT = "Libertinus Serif"
+# Pandoc wraps each table in a figure, which cannot break across pages, and in
+# align(center), which cells without an explicit alignment inherit. Captions
+# come from the book, so typst must not prefix them with "Table 2:".
 HEADER = """\
 #import "@preview/rose-pine:0.2.1": apply
 #show: apply(variant: "{variant}")
+#set figure(numbering: none)
+#show figure.where(kind: table): set block(breakable: true)
+#show table: set align(start)
 """
 
 

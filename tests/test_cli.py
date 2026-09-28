@@ -1,17 +1,30 @@
 """Tests for the command line and the typst header."""
 
+import re
 import subprocess
 
 import pytest
+import typst
 
 from epub2pdf import cli
 
+ROWS = "".join(f"<tr><td>row {i}</td></tr>" for i in range(1, 121))
 
-def pdf_text(pdf):
-    """Return the text of a PDF."""
+
+def pdf_text(pdf, *options):
+    """Return the text of a PDF, as pdftotext extracts it with options."""
     return subprocess.run(
-        ["pdftotext", pdf, "-"], capture_output=True, text=True, check=True
+        ["pdftotext", *options, pdf, "-"], capture_output=True, text=True, check=True
     ).stdout
+
+
+def compile_pdf(epub, tmp_path, fonts):
+    """Typeset and compile an EPUB, and return the PDF."""
+    pdf = tmp_path / "book.pdf"
+    typst.compile(
+        cli.typeset(epub, tmp_path), output=pdf, root=tmp_path, font_paths=fonts
+    )
+    return pdf
 
 
 def test_writes_pdf_next_to_input(make_epub, capsys):
@@ -77,3 +90,36 @@ def test_rejects_non_zip(tmp_path):
     epub.write_text("<html></html>")
     with pytest.raises(SystemExit, match="^epub2pdf: not an EPUB: "):
         cli.main([str(epub)])
+
+
+def test_breaks_tables_across_pages(make_epub, tmp_path, fonts):
+    epub = make_epub({"ch1.xhtml": f"<p>Intro</p><table>{ROWS}</table>"})
+    pdf = compile_pdf(epub, tmp_path, fonts)
+    assert "row 1\n" in pdf_text(pdf, "-f", "1", "-l", "1")
+
+
+def test_aligns_table_cells_to_start(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {
+            "ch1.xhtml": "<table><tr><td>Short</td></tr>"
+            "<tr><td>Much longer cell text</td></tr></table>"
+        }
+    )
+    bbox = pdf_text(compile_pdf(epub, tmp_path, fonts), "-bbox")
+    x_min = {w: x for x, w in re.findall(r'xMin="([\d.]+)"[^>]*>(Short|Much)<', bbox)}
+    assert x_min["Short"] == x_min["Much"]
+
+
+def test_keeps_captions_unnumbered(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {
+            "ch1.xhtml": "<table><caption>Prices</caption><tr><td>1</td></tr></table>"
+            '<figure><img src="../images/pic.png" alt=""/>'
+            "<figcaption>Map</figcaption></figure>"
+        }
+    )
+    text = pdf_text(compile_pdf(epub, tmp_path, fonts))
+    assert "Prices" in text
+    assert "Map" in text
+    assert "Table 1" not in text
+    assert "Figure 1" not in text
