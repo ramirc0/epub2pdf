@@ -20,6 +20,13 @@ HIDDEN_NAV = re.compile(rb"<nav\b[^>]*\bhidden\b[^>]*>.*?</nav>", re.DOTALL)
 CONTAINER = re.compile(rb"<(/?)(?:article|nav|footer|details)\b")
 HGROUP = re.compile(rb"<hgroup\b[^>]*>(.*?)</hgroup>", re.DOTALL)
 HGROUP_PART = re.compile(rb"<(h[1-6]|p)\b([^>]*)>(.*?)</\1>", re.DOTALL)
+# It turns notes (by epub:type or role="doc-endnotes") into footnotes, but only
+# for references in the same file, and discards the rest; files without such
+# references lose the note markup, so their notes render as written.
+LOCAL_NOTEREF = re.compile(rb'<a\b(?=[^>]*\bnoteref\b)[^>]*\bhref="#')
+ASIDE = re.compile(rb"<(/?)aside\b")
+ENDNOTES = re.compile(rb'\srole="doc-endnotes"')
+NOTE_TYPE = re.compile(rb"\b(?:foot|end|rear)notes?\b")
 # Some src and href attributes pad the path with whitespace.
 PADDED = re.compile(rb'\b(src|href)="\s*([^"]*?)\s*"')
 # Some manifests list files missing from the archive, which aborts the reader.
@@ -107,7 +114,11 @@ def _fix_html(data, broken_img):
         data = broken_img.sub(b"", data)
     data = HIDDEN_NAV.sub(b"", data)
     data = EPUB_TYPE.sub(lambda m: TOC_TYPE.sub(b"", m.group(0)), data)
-    return CONTAINER.sub(rb"<\1div", HGROUP.sub(_merge_hgroup, data))
+    data = CONTAINER.sub(rb"<\1div", HGROUP.sub(_merge_hgroup, data))
+    if not LOCAL_NOTEREF.search(data):
+        data = ASIDE.sub(rb"<\1div", ENDNOTES.sub(b"", data))
+        data = EPUB_TYPE.sub(lambda m: NOTE_TYPE.sub(b"", m.group(0)), data)
+    return data
 
 
 def _merge_hgroup(match):

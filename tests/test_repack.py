@@ -176,3 +176,28 @@ def test_keeps_ids_of_containers(make_epub, tmp_path, fonts, tag):
 def test_joins_hgroup_into_one_heading(make_epub, tmp_path):
     epub = make_epub({"ch1.xhtml": "<hgroup><h2>Chapter 1</h2><p>Start</p></hgroup>"})
     assert "== Chapter 1: Start\n" in typeset(epub, tmp_path).read_text()
+
+
+def test_keeps_notes_referenced_from_other_files(make_epub, tmp_path):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<p>Text<a href="notes.xhtml#n1" epub:type="noteref">1</a>'
+            '<a href="notes.xhtml#n2" epub:type="noteref">2</a></p>',
+            "notes.xhtml": '<section epub:type="endnotes" role="doc-endnotes"><ol>'
+            '<li id="n1" epub:type="endnote"><p>End text.</p></li></ol></section>'
+            '<aside id="n2" epub:type="rearnote"><p>Rear text.</p></aside>',
+        }
+    )
+    source = typeset(epub, tmp_path).read_text()
+    assert "End text." in source
+    assert "Rear text." in source
+
+
+def test_keeps_footnotes_referenced_from_same_file(make_epub, tmp_path):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<p>Text<a href="#f1" epub:type="noteref">1</a></p>'
+            '<aside id="f1" epub:type="footnote"><p>Foot text.</p></aside>'
+        }
+    )
+    assert "#footnote[Foot text." in typeset(epub, tmp_path).read_text()
