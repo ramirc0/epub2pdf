@@ -86,3 +86,22 @@ def test_escapes_label_quotes():
         "t": "RawInline",
         "c": ["typst", '#metadata(none)#label("a\\"b\\\\c");'],
     }
+
+
+def test_hoists_anchors_out_of_headings(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {"ch1.xhtml": '<h2><span id="h">Title</span></h2><p><a href="#h">Up</a></p>'}
+    )
+    typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)
+
+
+def test_hoists_anchors_out_of_repeated_table_rows(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<p><a href="#th">Head</a> <a href="#tf">Foot</a></p>'
+            '<table><thead><tr><th><span id="th">Name</span></th></tr></thead>'
+            f"<tbody>{'<tr><td>row</td></tr>' * 120}</tbody>"
+            '<tfoot><tr><td><span id="tf">Total</span></td></tr></tfoot></table>'
+        }
+    )
+    typst.compile(typeset(epub, tmp_path), root=tmp_path, font_paths=fonts)

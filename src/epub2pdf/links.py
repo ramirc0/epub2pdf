@@ -155,6 +155,33 @@ def _inline(el, linked):
 
 
 def _block(el, linked):
-    """Put the anchor of a block element in front of it."""
+    """Put the anchors of a block element in front of it.
+
+    The outline repeats each heading's text, and a table that breaks across
+    pages repeats its header and footer rows, which would define their anchors
+    twice; hoist them in front. Inlines are walked first.
+    """
+    out = []
+    if el["t"] == "Header":
+        _walk(el["c"][2], _hoist(out))
+    elif el["t"] == "Table":
+        head, foot = el["c"][3], el["c"][5]
+        for row in head[1] + foot[1]:
+            for cell in row[1]:
+                _walk(cell[4], _hoist(out))
     anchor = _take(el, linked)
-    return [{"t": "RawBlock", "c": ["typst", anchor]}, el] if anchor else None
+    if anchor:
+        out.append({"t": "RawBlock", "c": ["typst", anchor]})
+    return out + [el]
+
+
+def _hoist(out):
+    """Return a filter moving the anchors it meets into out, as blocks."""
+
+    def move(raw):
+        if raw["c"][0] == "typst" and raw["c"][1].startswith("#metadata"):
+            out.append({"t": "RawBlock", "c": ["typst", raw["c"][1]]})
+            return []
+        return None
+
+    return {"RawInline": move}
