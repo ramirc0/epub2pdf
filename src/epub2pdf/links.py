@@ -42,7 +42,7 @@ BACKLINK = re.compile(
 
 
 def fix(doc: dict) -> dict:
-    """Repair the links in a pandoc AST of an EPUB.
+    """Repair a pandoc AST of an EPUB for the typst writer.
 
     Parameters
     ----------
