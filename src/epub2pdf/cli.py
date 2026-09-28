@@ -1,6 +1,7 @@
 """Convert an EPUB to a rose-pine themed PDF with pandoc and typst."""
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -8,6 +9,8 @@ import tempfile
 from pathlib import Path
 
 import typst
+
+from epub2pdf import links
 
 VARIANTS = ("rose-pine", "rose-pine-moon", "rose-pine-dawn")
 MAINFONT = "Libertinus Serif"
@@ -43,24 +46,32 @@ def typeset(
     subprocess.CalledProcessError
         If pandoc fails.
     """
-    subprocess.run(
-        [
-            "pandoc",
-            "-f", "epub",
-            "-t", "typst",
-            "-s",
-            "--extract-media=media",
-            "-V", "header-includes=" + HEADER.format(variant=variant),
-            "-V", f"mainfont={mainfont}",
-            "-o", "book.typ",
-            epub.resolve(),
-        ],
+    doc = _pandoc(
+        workdir, "-f", "epub", "-t", "json", "--extract-media=media", epub.resolve()
+    )
+    _pandoc(
+        workdir,
+        "-f", "json",
+        "-t", "typst",
+        "-s",
+        "-V", "header-includes=" + HEADER.format(variant=variant),
+        "-V", f"mainfont={mainfont}",
+        "-o", "book.typ",
+        stdin=json.dumps(links.fix(json.loads(doc))),
+    )  # fmt: skip
+    return workdir / "book.typ"
+
+
+def _pandoc(workdir, *args, stdin=None):
+    """Run pandoc in workdir and return its output."""
+    return subprocess.run(
+        ["pandoc", *args],
         cwd=workdir,
+        input=stdin,
         capture_output=True,
         text=True,
         check=True,
-    )  # fmt: skip
-    return workdir / "book.typ"
+    ).stdout
 
 
 def convert(
