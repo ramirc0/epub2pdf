@@ -1,9 +1,15 @@
 """Tests for the EPUB repairs in epub2pdf.repack."""
 
+import typst
+
 from epub2pdf import repack
 from epub2pdf.cli import typeset
 
 OUTLINE = "#outline(\n  title: auto,\n  depth: 2\n);"
+CH2 = (
+    '<html xmlns="http://www.w3.org/1999/xhtml">'
+    '<body><section id="s"><p>Two</p></section></body></html>'
+)
 
 
 def test_generates_contents_when_nav_is_outside_spine(make_epub, tmp_path):
@@ -35,3 +41,29 @@ def test_generates_contents_when_any_package_lacks_them(make_epub, tmp_path):
         files={"other.opf": "<package><manifest/><spine/></package>"},
     )
     assert repack.repack(epub, tmp_path / "fixed.epub")
+
+
+def test_drops_manifest_items_missing_from_archive(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": "<p>One</p>"},
+        manifest='<item id="gone" href="text/gone.xhtml" '
+        'media-type="application/xhtml+xml"/>',
+        spine='<itemref idref="gone"/>',
+    )
+    assert "One" in typeset(epub, tmp_path).read_text()
+
+
+def test_trims_padded_paths(make_epub, tmp_path, fonts):
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<p><img src=" ../images/pic.png " alt=""/> '
+            '<a href=" ch2.xhtml#s ">Two</a></p>'
+        },
+        files={"text/ch2.xhtml": CH2},
+        manifest='<item id="ch2" href=" text/ch2.xhtml " '
+        'media-type="application/xhtml+xml"/>',
+        spine='<itemref idref="ch2"/>',
+    )
+    book = typeset(epub, tmp_path)
+    assert "#link(<ch2.xhtml_s>)[Two]" in book.read_text()
+    typst.compile(book, root=tmp_path, font_paths=fonts)
