@@ -6,11 +6,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
 import typst
 
-from epub2pdf import links
+from epub2pdf import links, repack
 
 VARIANTS = ("rose-pine", "rose-pine-moon", "rose-pine-dawn")
 MAINFONT = "Libertinus Serif"
@@ -43,17 +44,21 @@ def typeset(
 
     Raises
     ------
+    zipfile.BadZipFile
+        If epub is not a zip archive.
     subprocess.CalledProcessError
         If pandoc fails.
     """
+    toc = repack.repack(epub, workdir / "fixed.epub")
     doc = _pandoc(
-        workdir, "-f", "epub", "-t", "json", "--extract-media=media", epub.resolve()
+        workdir, "-f", "epub", "-t", "json", "--extract-media=media", "fixed.epub"
     )
     _pandoc(
         workdir,
         "-f", "json",
         "-t", "typst",
         "-s",
+        *(["--toc", "--toc-depth=2"] if toc else []),
         "-V", "header-includes=" + HEADER.format(variant=variant),
         "-V", f"mainfont={mainfont}",
         "-o", "book.typ",
@@ -97,6 +102,8 @@ def convert(
 
     Raises
     ------
+    zipfile.BadZipFile
+        If epub is not a zip archive.
     subprocess.CalledProcessError
         If pandoc fails.
     typst.TypstError
@@ -154,6 +161,8 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         warnings = convert(args.input, output, args.variant, args.mainfont)
+    except zipfile.BadZipFile:
+        sys.exit(f"epub2pdf: not an EPUB: {args.input}")
     except subprocess.CalledProcessError as err:
         sys.exit(err.stderr.rstrip())
     except typst.TypstError as err:

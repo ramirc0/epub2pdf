@@ -70,3 +70,10 @@ def test_exits_with_typst_diagnostic(make_epub, monkeypatch):
     monkeypatch.setattr(cli, "typeset", typeset)
     with pytest.raises(SystemExit, match="unknown variable: nonexistent"):
         cli.main([str(epub)])
+
+
+def test_rejects_non_zip(tmp_path):
+    epub = tmp_path / "book.epub"
+    epub.write_text("<html></html>")
+    with pytest.raises(SystemExit, match="^epub2pdf: not an EPUB: "):
+        cli.main([str(epub)])
