@@ -136,3 +136,22 @@ def test_raises_note_references(make_epub, tmp_path):
     source = typeset(epub, tmp_path).read_text()
     assert "#link(<ch2.xhtml_n1>)[#super[1];]" in source
     assert "#link(<ch2.xhtml_n2>)[#super[2];]" in source
+
+
+def test_drops_inserted_cover_when_book_shows_it(make_epub, tmp_path):
+    epub = make_epub(
+        {
+            "cover.xhtml": '<p><img src="../images/pic.png" alt=""/></p>',
+            "ch1.xhtml": "<p>One</p>",
+        },
+        metadata='<dc:title>Test</dc:title><meta name="cover" content="pic"/>',
+    )
+    assert typeset(epub, tmp_path).read_text().count('image("') == 1
+
+
+def test_keeps_inserted_cover_when_book_lacks_it(make_epub, tmp_path):
+    epub = make_epub(
+        {"ch1.xhtml": "<p>One</p>"},
+        metadata='<dc:title>Test</dc:title><meta name="cover" content="pic"/>',
+    )
+    assert typeset(epub, tmp_path).read_text().count('image("') == 1

@@ -49,6 +49,7 @@ def fix(doc: dict) -> dict:
     dict
         The repaired AST.
     """
+    _drop_inserted_cover(doc["blocks"])
     ids = _ids(doc)
     linked = set()
     _walk(doc, {"Link": lambda link: _repair(link, ids, linked)})
@@ -96,6 +97,20 @@ def _ids(doc):
 
     _walk(doc, {"Inline": collect, "Block": collect})
     return ids
+
+
+def _drop_inserted_cover(blocks):
+    """Drop the cover pandoc inserts when the book has a cover page of its own.
+
+    Pandoc puts the declared cover image ahead of the book's first page.
+    """
+    first = blocks[0]["c"] if blocks and blocks[0]["t"] in ("Para", "Plain") else []
+    if len(first) != 1 or first[0]["t"] != "Image":
+        return
+    sources = []
+    _walk(blocks[1:], {"Image": lambda image: sources.append(image["c"][2][0])})
+    if first[0]["c"][2][0] in sources:
+        del blocks[0]
 
 
 def _chapter_of(target, ids):
