@@ -110,6 +110,20 @@ def test_aligns_table_cells_to_start(make_epub, tmp_path, fonts):
     assert x_min["Short"] == x_min["Much"]
 
 
+def test_sets_lines_two_alphabets_wide(make_epub, tmp_path, fonts):
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    prose = "the quick brown fox jumps over a lazy dog " * 30
+    epub = make_epub({"ch1.xhtml": f"<p>{alphabet}</p><p>{prose}</p>"})
+    bbox = pdf_text(compile_pdf(epub, tmp_path, fonts), "-bbox-layout")
+    x_min, x_max = re.search(
+        rf'<word xMin="([\d.]+)" [^>]*xMax="([\d.]+)"[^>]*>{alphabet}<', bbox
+    ).groups()
+    measure = 2 * (float(x_max) - float(x_min))
+    lines = re.findall(r'<line xMin="([\d.]+)" [^>]*xMax="([\d.]+)"', bbox)
+    widest = max(float(right) - float(left) for left, right in lines)
+    assert widest == pytest.approx(measure, abs=1)
+
+
 def test_keeps_captions_unnumbered(make_epub, tmp_path, fonts):
     epub = make_epub(
         {

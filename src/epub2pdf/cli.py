@@ -18,7 +18,16 @@ MAINFONT = "Libertinus Serif"
 # Pandoc wraps each table in a figure, which cannot break across pages, and in
 # align(center), which cells without an explicit alignment inherit. Captions
 # come from the book, so typst must not prefix them with "Table 2:".
+# Pandoc's conf sets the page inside itself, so only arguments to conf can
+# narrow the text to two lowercase alphabets of the main font.
 HEADER = """\
+#let pandoc-conf = conf
+#let conf(..args) = context {{
+  let alphabet = measure(
+    text(font: args.named().font, size: 11pt)[abcdefghijklmnopqrstuvwxyz]
+  ).width
+  pandoc-conf(..args, paper: "a5", fontsize: 11pt, margin: (x: 50% - alphabet, y: 1in))
+}}
 #import "@preview/rose-pine:0.2.1": apply
 #show: apply(variant: "{variant}")
 #set figure(numbering: none)
@@ -173,7 +182,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(err.stderr.rstrip())
     except typst.TypstError as err:
         sys.exit(err.diagnostic.rstrip())
-    for warning in warnings:
-        if warning.message.startswith("unknown font family"):
-            print(f"warning: {warning.message}", file=sys.stderr)
+    for message in dict.fromkeys(warning.message for warning in warnings):
+        if message.startswith("unknown font family"):
+            print(f"warning: {message}", file=sys.stderr)
     print(f"Wrote {output}")
