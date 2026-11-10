@@ -137,3 +137,14 @@ def test_keeps_captions_unnumbered(make_epub, tmp_path, fonts):
     assert "Map" in text
     assert "Table 1" not in text
     assert "Figure 1" not in text
+
+
+def test_breaks_long_figures_across_pages(make_epub, tmp_path, fonts):
+    caption = "word " * 400 + "lastword"
+    epub = make_epub(
+        {
+            "ch1.xhtml": '<figure><img src="../images/pic.png" alt="" height="400"/>'
+            f"<figcaption>{caption}</figcaption></figure>"
+        }
+    )
+    assert "lastword" in pdf_text(compile_pdf(epub, tmp_path, fonts))
